@@ -1,0 +1,454 @@
+---
+title: "knn_&_nb"
+output: html_document
+date: "2023-12-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+K-nn
+
+```{r}
+
+library(readr)
+library(dplyr)
+library(tidyr)
+
+library(readxl)
+df <- read_excel("C:/Users/maxma/Documents/AD 699/Final_699/cleaned_df.xlsx")
+```
+
+```{r}
+
+colnames(df)
+```
+
+#Splitting the data
+```{r}
+library(tidyverse)
+
+table(df$amenities)
+```
+```{r}
+str(df$amenities)
+```
+```{r}
+df$amenities <- factor(df$amenities)
+
+
+set.seed(1626)
+train.index <- sample(c(1:nrow(df)), nrow(df)*0.6) 
+train.df <- df[train.index, ]
+valid.df <- df[-train.index, ]
+
+
+library(dplyr)
+has_wifi <- filter(train.df, amenities =="TRUE")
+no_wifi <- filter(train.df, amenities =="FALSE")
+```
+
+
+#t test to know whether the means of two groups differ significantly
+
+```{r}
+t.test(has_wifi$accommodates, no_wifi$accommodates)
+```
+```{r}
+t.test(has_wifi$host_total_listings_count, no_wifi$host_total_listings_count)
+```
+```{r}
+
+t.test(has_wifi$price, no_wifi$price)
+```
+
+```{r}
+
+t.test(has_wifi$review_scores_rating, no_wifi$review_scores_rating)
+```
+```{r}
+t.test(has_wifi$beds, no_wifi$beds)
+```
+```{r}
+#New Data to test 
+new_df <- data.frame(
+  accommodates = 6,
+  host_total_listings_count = 6,
+  price = 300,
+  beds = 3
+)
+
+
+#Normalization
+
+library(caret)
+
+# Specify the columns to normalize
+columns_to_normalize <- c("accommodates", "host_total_listings_count", "price", "beds")
+
+# Normalize train.df
+norm_values <- preProcess(train.df[, columns_to_normalize], method = c("center", "scale"))
+train.norm.df <- as.data.frame(predict(norm_values, train.df[, columns_to_normalize]))
+
+# Normalize valid.df
+valid.norm.df <- as.data.frame(predict(norm_values, valid.df[, columns_to_normalize]))
+
+
+# Normalize new_df
+new_df.norm <- as.data.frame(predict(norm_values, new_df[, columns_to_normalize]))
+
+
+train.norm.df$amenities <- train.df$amenities
+train.norm.df$host_name <- train.df$host_name
+
+valid.norm.df$amenities <- valid.df$amenities
+valid.norm.df$host_name <- valid.df$host_name
+
+# Add a new column with row names
+train.norm.df$row_id <- rownames(train.norm.df)
+valid.norm.df$row_id <- rownames(valid.norm.df)
+```
+
+```{r}
+# KNN- does the new place has wifi?
+
+library(FNN)
+
+new_df.norm <- new_df.norm[, 1:4]
+
+nn <- knn(train = train.norm.df[, 1:4], test = new_df.norm,
+          cl = train.norm.df[, 5], k = 3)
+row.names(train.df)[attr(nn, "nn.index")]
+
+nn
+```
+```{r}
+
+#getting the correct number of clusters
+
+library(caret)
+set.seed(1616) 
+
+
+train_control <- trainControl(method = "cv", number = 10)  # 10-fold cross-validation
+knn_fit <- train(amenities ~ ., data = train.norm.df, method = "knn", trControl = train_control, tuneLength = 10)
+
+# Viewing the results
+print(knn_fit)
+```
+```{r}
+
+#Accuracy was used to select the optimal model using the largest value.
+#The final value used for the model was k = 7.
+
+new_df.norm <- new_df.norm[, 1:4]
+
+nn1 <- knn(train = train.norm.df[, 1:4], test = new_df.norm,
+          cl = train.norm.df[, 5], k = 7)
+row.names(train.df)[attr(nn1, "nn.index")]
+
+nn1
+```
+```{r}
+
+#Accuracy was used to select the optimal model using the largest value.
+#The final value used for the model was k = 7.
+
+new_df.norm <- new_df.norm[, 1:4]
+
+nn1 <- knn(train = train.norm.df[, 1:4], test = new_df.norm,
+          cl = train.norm.df[, 5], k = 7)
+row.names(train.df)[attr(nn1, "nn.index")]
+
+nn1
+```
+```{r}
+#7 nearest neighbours 
+values_to_filter <- c("642", "13", "345", "849", "189", "1007", "218")
+
+# Add a new column with row names
+train.norm.df$row_id <- rownames(train.norm.df)
+valid.norm.df$row_id <- rownames(valid.norm.df)
+
+# Now filter using this new column
+filtered_data <- subset(train.norm.df, row_id %in% values_to_filter, select = c("amenities", "host_name"))
+
+
+print(filtered_data)
+```
+
+```{r}
+library(caret)
+
+# Assuming 'valid_labels' contains the actual class labels for your validation set
+
+# Calculate accuracy
+accuracy <- sum(nn1 == valid.norm.df[, 5]) / length(valid.norm.df[, 5])
+
+
+
+print(accuracy)
+
+
+```
+
+NAIVE BAYES
+
+```{r}
+#Naive Bayes 
+
+str(df)
+#review_scores_rating is the response variable 
+```
+```{r}
+#input variables cannot be review columns- host_response_rate, host_identity_verified, room_type, property_type
+df1 <- df
+
+df1$host_response_rate <- as.factor(df1$host_response_rate)
+df1$host_identity_verified <- as.factor(df1$host_identity_verified)
+df1$room_type <- as.factor(df1$room_type)
+df1$property_type <- as.factor(df1$property_type)
+
+```
+
+```{r}
+table(df1$review_scores_rating)
+```
+```{r}
+#binning 
+
+library(dplyr)
+
+# Number of bins
+n_bins <- 4
+
+
+# Calculate the break points
+break_points <- quantile(df1$review_scores_rating, 
+                         probs = seq(0, 1, length.out = n_bins + 1), 
+                         na.rm = TRUE)
+
+# Print the break points
+print(break_points)
+
+```
+
+```{r}
+
+# Binning using cut()
+df1$review_scores_rating_bin <- cut(df1$review_scores_rating, 
+                                    breaks = quantile(df1$review_scores_rating, 
+                                                      probs = seq(0, 1, length.out = n_bins + 1), 
+                                                      na.rm = TRUE),
+                                    include.lowest = TRUE,
+                                    labels = FALSE)
+
+# Values in the first bin
+values_in_first_bin <- df1$review_scores_rating[df1$review_scores_rating_bin == 1]
+
+
+# Print the values in the first bin
+print(values_in_first_bin)
+```
+```{r}
+
+aggregate(df1$review_scores_rating, by = list(df1$review_scores_rating_bin), FUN = mean)
+
+
+
+df1$review_scores_rating_bin<- as.factor(df1$review_scores_rating_bin)
+```
+
+```{r}
+library(dplyr)
+
+df1 <- df1 %>%
+  mutate(property_category = case_when(
+    grepl("Entire", property_type) ~ "Entire Place",
+    grepl("Private room", property_type) ~ "Private Room",
+    grepl("Room in", property_type) ~ "Shared Room",
+    TRUE ~ "Other"  # Default category
+  ))
+```
+
+```{r}
+
+df1 <- df1[!is.na(df1$property_type), ]
+
+library(dplyr)
+
+df1 <- df1 %>%
+  mutate(binned_property_type = case_when(
+    grepl("Entire", property_type) ~ "Entire Place",
+    grepl("Private room", property_type) ~ "Private Room",
+    grepl("Room in", property_type) ~ "Shared Room",
+    # Add more conditions as needed
+    TRUE ~ "Other"  # Catches everything else
+  ))
+
+```
+
+```{r}
+#New apartment
+new_apt <- data.frame(
+  host_identity_verified = 0,
+  property_category = "Private Room",
+  binned_property_type = "Private Room",
+  beds_grouped = 2
+)
+
+print(new_apt)
+```
+```{r}
+
+set.seed(1626)
+train.index <- sample(c(1:nrow(df1)), nrow(df1)*0.6) 
+train_df <- df1[train.index, ]
+valid_df <- df1[-train.index, ]
+
+```
+
+```{r}
+
+library(ggplot2)
+
+ggplot(train_df, aes(x = review_scores_rating_bin, fill = host_identity_verified)) +
+  geom_bar(position = "fill") +
+  labs(title = "Proportional Barplot for review_scores_rating_bin") +
+  xlab("host_identity_verified") +
+  ylab("Proportion") +
+  theme_minimal()
+```
+
+```{r}
+library(e1071)
+rating.nb <- naiveBayes(review_scores_rating_bin ~ host_identity_verified+property_category+binned_property_type + beds_grouped, data = train_df)
+
+rating.nb
+```
+
+```{r}
+library(caret)
+
+pred.class <- predict(rating.nb, newdata = train_df)
+confusionMatrix(pred.class, train_df$review_scores_rating_bin)
+
+
+pred.class <- predict(rating.nb, newdata = valid_df)
+confusionMatrix(pred.class, valid_df$review_scores_rating_bin)
+
+
+predicted_rating <- predict(rating.nb, newdata = new_apt, type = "class")
+
+predicted_rating
+```
+
+```{r}
+# A-priori probabilities
+apriori_probs <- data.frame(Class = 1:4, Probability = c(0.2790467, 0.3207547, 0.1698113, 0.2303873))
+
+# ggplot
+ggplot(apriori_probs, aes(x = Class, y = Probability, fill = as.factor(Class))) +
+  geom_bar(stat = "identity", color = "black", show.legend = FALSE) +
+  scale_fill_manual(values = rep("seagreen3", 4)) +
+  theme_minimal() +
+  labs(title = "A-priori Probabilities", x = "Class", y = "Probability")
+```
+
+```{r}
+# Conditional probabilities for host_identity_verified
+cond_probs_host_identity_verified <- data.frame(
+  Class = rep(1:4, each = 2),
+  IdentityVerified = rep(c(0, 1), 4),
+  Probability = c(0.05693950, 0.94306050, 0.08978328, 0.91021672, 0.04093567, 0.95906433, 0.06465517, 0.93534483)
+)
+
+# ggplot
+ggplot(cond_probs_host_identity_verified, aes(x = as.factor(Class), y = Probability, fill = as.factor(IdentityVerified))) +
+  geom_bar(stat = "identity", position = position_dodge(), color = "black") +
+  scale_fill_manual(values = c("seagreen4", "seagreen2")) +
+  theme_minimal() +
+  labs(title = "Conditional Probabilities: Host Identity Verified", x = "Class", y = "Probability", fill = "Identity Verified")
+
+```
+
+```{r}
+# Converting categorical variables to factors
+train_df$host_identity_verified <- factor(train_df$host_identity_verified)
+train_df$property_category <- factor(train_df$property_category)
+train_df$binned_property_type <- factor(train_df$binned_property_type)
+train_df$beds_grouped <- factor(train_df$beds_grouped)
+
+train_df$host_acceptance_rate <- factor(train_df$host_acceptance_rate)
+train_df$price <- factor(train_df$price)
+train_df$host_response_rate <- factor(train_df$host_response_rate)
+
+
+
+
+# Retrain the model
+rating.nb1 <- naiveBayes(review_scores_rating_bin ~ host_identity_verified + property_category + beds_grouped + price + host_response_rate + host_acceptance_rate, data = train_df)
+
+rating.nb1
+```
+```{r}
+library(caret)
+
+pred.class <- predict(rating.nb1, newdata = train_df)
+confusionMatrix(pred.class, train_df$review_scores_rating_bin)
+
+
+pred.class <- predict(rating.nb1, newdata = valid_df)
+confusionMatrix(pred.class, valid_df$review_scores_rating_bin)
+
+
+predicted_rating <- predict(rating.nb1, newdata = new_apt, type = "class")
+
+predicted_rating
+```
+```{r}
+
+
+# Calculate min and max values for each bin
+bin_ranges <- aggregate(review_scores_rating ~ review_scores_rating_bin, data = df1, 
+                        FUN = function(x) c(min = min(x), max = max(x)))
+
+# Convert the results to a more readable format
+bin_ranges <- do.call(data.frame, bin_ranges)
+names(bin_ranges)[2:3] <- c("Min_Rating", "Max_Rating")
+
+# Print the ranges for each bin
+print(bin_ranges)
+
+```
+
+```{r}
+# Count the number of values in each bin
+bin_counts <- table(df1$review_scores_rating_bin)
+
+# Print the count of each bin
+print(bin_counts)
+```
+

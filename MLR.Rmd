@@ -1,0 +1,311 @@
+---
+title: "Multiple Linear Regression"
+author: "Sheethal C Jayaram"
+date: "2023-12-11"
+output: html_document
+---
+
+```{r}
+
+df <- subset(cleaned_df, select = -c(neighborhood_overview,host_id, host_name, 
+                                     host_since, host_location,latitude,longitude,
+                                     property_type,amenities,beds_grouped))
+
+```
+
+In this step, we filter out variables from the cleaned dataset that currently hold no significance in a multiple linear regression model, based on domain knowledge.
+
+
+```{r}
+
+head(df)
+
+missing_values <- df %>%
+  summarise_all(~sum(is.na(.)))
+
+print(missing_values)
+
+```
+
+
+
+Let us view the summary statistics of price. 
+
+```{r}
+
+#Summary Statistics
+
+summary(df$price)
+
+```
+The output provides a summary of the distribution of the variable "price" in the data. 
+
+Min. (Minimum): The smallest value in the "price" variable is 20.0. This is the minimum price observed in the data.
+
+1st Qu. (First Quartile): The value at the first quartile (25th percentile) is 90.0. This means that 25% of the data falls below this value.
+
+Median: The median (50th percentile) price is 125.0. It represents the middle value of the data when it is ordered.
+
+Mean (Average): The mean (average) price is 153.4. It is calculated by summing up all prices and dividing by the total number of observations.
+
+3rd Qu. (Third Quartile): The value at the third quartile (75th percentile) is 174.0. This means that 75% of the data falls below this value.
+
+Max. (Maximum): The largest value in the "price" variable is 986.0. This is the maximum price observed in the data.
+
+In summary, this output provides a quick overview of the central tendency and spread of the "price" variable, including minimum, quartiles, median, mean, and maximum values.
+
+
+
+
+Let us visualize the variation of price with some variables. 
+
+
+```{r}
+
+library(ggplot2)
+
+ggplot(df, aes(x = room_type, y = price)) +
+  geom_boxplot() +
+  labs(title = "Price Distribution Across Room Types",
+       x = "Room Type",
+       y = "Price")
+
+```
+
+```{r}
+
+cor(df$accommodates, df$price)
+
+```
+
+
+
+
+MULTIPLE LINEAR REGRESSION
+
+
+Regression modeling means not only estimating the coefficients, but also choosing what predictors to include and in what form. 
+
+
+```{r}
+
+set.seed(194)
+
+train.index <- sample(c(1:nrow(df)), nrow(df)*0.6)
+train_df <- df[train.index, ]
+valid_df <- df[-train.index, ]
+
+```
+
+
+When testing a model on new, unseen data, it is crucial to split the data into training and test sets. Train data allows your model to learn, while validation data allows you to determine how well your model learned and performed on new data that it had not previously encountered. Above code splits the data into 60% training and 40% test set. 
+
+
+Before performing MLR, let us check the correlation between numeric variables for our understanding. 
+
+```{r}
+
+
+numeric_df <- train_df[sapply(train_df, is.numeric)]
+correlation_matrix <- cor(numeric_df)
+correlation_matrix <- as.data.frame(correlation_matrix)
+
+
+
+#write_xlsx(correlation_matrix,"C:\\Users\\amitk\\OneDrive\\Desktop\\Data Mining\\Team Project\\correlations.xlsx")
+
+```
+
+The strong correlation between several variables highlights a significant issue of multicollinearity in the regression model. This high correlation can lead to unstable coefficient estimates and make it hard to figure out the individual impacts of these predictors on the outcome variable. 
+
+
+
+
+As our first model, we can build a linear regression model with all the eligible variables and check the results. 
+
+
+```{r}
+
+
+
+#model <- lm(log(price) ~ host_response_rate + host_acceptance_rate + host_listings_count + host_total_listings_count+ beds + minimum_nights + maximum_nights + minimum_nights_avg_ntm + maximum_nights_avg_ntm + number_of_reviews + number_of_reviews_ltm + number_of_reviews_l30d + review_scores_rating + review_scores_accuracy + review_scores_cleanliness + review_scores_checkin + review_scores_communication + review_scores_location + review_scores_value + calculated_host_listings_count_entire_homes + calculated_host_listings_count_private_rooms + reviews_per_month , data = df)
+
+model <- lm(log(price) ~ . , data = train_df)
+
+summary(model)
+
+```
+
+
+
+
+
+We can next eliminate variables demonstrating high multi-collinearity (as shown in previous step). 
+
+```{r}
+
+cor(df$beds, df$accommodates)
+
+```
+```{r}
+
+cor.test(df$beds, df$accommodates)
+
+```
+```{r}
+
+high_correlations <- train_df[c("beds", "accommodates", "host_listings_count", "host_total_listings_count", "calculated_host_listings_count", "calculated_host_listings_count_entire_homes", "minimum_nights_avg_ntm", "minimum_nights", "maximum_nights_avg_ntm","maximum_nights","availability_30","availability_60", "availability_90", "availability_365", "number_of_reviews", "number_of_reviews_ltm", "number_of_reviews_l30d", "review_scores_rating", "review_scores_accuracy", "review_scores_cleanliness", "review_scores_checkin", "review_scores_communication", "review_scores_location", "review_scores_value")]
+
+                              
+correlation_matrix <- cor(high_correlations)
+
+
+```
+Highly Correlated Variables:
+
+
+review_scores_accuracy, review_scores_cleanliness, review_scores_checkin, review_scores_communication, and review_scores_value show high positive correlations with review_scores_rating. review_scores_accuracy and review_scores_communication have a correlation above 0.7. Similarly, review_scores_cleanliness and review_scores_communication also have a correlation above 0.7. This indicates strong positive relationships.
+
+As we want to keep a single variable that represents overall guest satisfaction, review_scores_rating is a suitable choice as it has high correlations with other review scores. It is a single, comprehensive metric that summarizes the overall quality of a listing. So, we simplify our multiple linear regression (MLR) model by retaining only one review score. This chosen score is the final rating for a place, likely derived from averaging individual review scores.
+
+Availability measures are also highly correlated. It appears that availability_365 has the lowest correlations with the other variables (availability_30, availability_60, availability_90). In this case, the correlation between availability_365 and the other variables is lower compared to the correlations among the other variables. Therefore, to mitigate multicollinearity, we are choosing to keep availability_365 and exclude the other availability variables. Also, we are concerned about long-term patterns and overall availability throughout the year to determine price.
+
+
+'beds' and 'accommodates' have a high positive correlation of 0.86. Choosing "beds" as a variable provides a more accurate representation of the lodging's capacity by explicitly indicating the number of dedicated sleeping spaces, offering clarity on the available bed count. This information is crucial for potential guests seeking details on individual sleeping arrangements, allowing them to assess how many people can be accommodated comfortably in separate beds. So, we proceed to drop 'accommodates'. 
+
+Based on the high correlation coefficients, it would be appropriate to choose either "host_listings_count" or "host_total_listings_count" since they exhibit nearly perfect correlation (0.996854806). We are keeping only 'host_total_listings_count'.  Similarly, we are also dropping "calculated_host_listings_count" and "calculated_host_listings_count_entire_homes". 
+
+Similarly, we also drop "minimum_nights_avg_ntm" and	"maximum_nights_avg_ntm" due to correlation with "minimum_nights" and	"maximum_nights". 
+
+We are also only keeping the reviews for the last 12 months "number_of_reviews_ltm" and dropping "number_of_reviews", "number_of_reviews_l30d", "reviews_per_month" due to multi-collinearity. 
+
+
+```{r}
+
+
+train_df <- subset(train_df, select = -c(review_scores_accuracy, review_scores_cleanliness,review_scores_checkin, review_scores_communication, review_scores_location, review_scores_value, availability_30,availability_60, availability_90, accommodates, host_listings_count, calculated_host_listings_count, calculated_host_listings_count_entire_homes, minimum_nights_avg_ntm, maximum_nights_avg_ntm, number_of_reviews, number_of_reviews_l30d, reviews_per_month))
+
+
+valid_df <- subset(valid_df, select = -c(review_scores_accuracy, review_scores_cleanliness,review_scores_checkin, review_scores_communication, review_scores_location, review_scores_value, availability_30,availability_60, availability_90, accommodates, host_listings_count, calculated_host_listings_count, calculated_host_listings_count_entire_homes, minimum_nights_avg_ntm, maximum_nights_avg_ntm, number_of_reviews, number_of_reviews_l30d, reviews_per_month))
+
+
+```
+
+
+```{r}
+
+model <- lm(log(price) ~ . , data = train_df)
+
+summary(model)
+
+```
+
+
+We can next perform MLR through backward elimination of variables (not including variables dropped). We considered the log-transformed price as it is right-skewed. 
+
+
+```{r}
+
+model <- lm(log(price) ~ . , data = train_df)
+
+model_1 <- step(model, direction = "backward")
+summary(model_1)
+print(summary(model_1))
+
+
+
+```
+Break-down of the Regression Equation:
+
+Intercept (Constant):
+
+The intercept term is 5.2665933. This represents the predicted log-transformed price when all predictors are zero (or for categorical predictors, for the reference categories).
+
+Coefficients for Predictors:
+
+Each coefficient represents the change in the log-transformed price associated with a one-unit change in the corresponding predictor, holding all other predictors constant.
+
+For example, the coefficient 0.1507163 for host_identity_verified suggests that, all else being constant, being a verified host is associated with a 15.07% increase in the log-transformed price.
+
+
+Significant Predictors:
+
+The significance of each coefficient is indicated by the p-values. For instance, a p-value less than 0.05 is often considered statistically significant. Several predictors are statistically significant, as indicated by the asterisks in the "Estimate" column and the corresponding p-values. Examples of significant predictors include host_identity_verified, room_type (specific categories), bathrooms_text (specific categories), beds, minimum_nights, has_availability, availability_365, number_of_reviews_ltm, review_scores_rating, instant_bookable, and calculated_host_listings_count_private_rooms.
+
+
+Exponential Transformation:
+
+To interpret these coefficients in terms of the original price, we can exponentiate them. For example, 
+exp(0.0372340) for beds would represent the multiplicative change in the price associated with a one-unit increase in the number of beds. The model explains about 34.1% of the variance in the log-transformed price (R-squared = 0.341).
+
+The overall significance of the model is assessed by the F-statistic and its associated p-value.
+
+Other metrics that are relevant for linear regression models:
+
+The model's performance is assessed using metrics like the residual standard error, multiple R-squared, and adjusted R-squared. The multiple R-squared value indicates the proportion of variance in the log-transformed price explained by the predictors (34.1%). 
+
+F-statistic is 15.26. F-Test helps to answer how much more effective is our model, vs. having no model at all. The better the fit, the higher the F-score will be. The F-statistic is used in linear regression to assess the overall significance of a regression model. It quantifies the ratio of the variation explained by the model to the unexplained random variation. The F-statistic of 15.26 in this case, typically indicates that at least one predictor is significant in explaining the dependent variable, and the model is meaningful. A low p-value associated with the F-statistic suggests that the model is statistically significant in predicting the dependent variable.
+
+The residuals (differences between predicted and actual log prices) show a summary of the model's predictive accuracy.
+
+Min: This is the minimum value of the residuals. The minimum residual is -1.79498, indicating that there is at least one data point for which the model underpredicts the log-transformed price by approximately 1.79498 units.
+
+1Q (First Quartile): This is the value below which 25% of the residuals fall. It's -0.27075, suggesting that a quarter of the residuals are below -0.27075.
+
+Median: This is the median (or middle) value of the residuals. It is 0.00876, indicating that half of the residuals are below this value, and half are above.
+
+3Q (Third Quartile): This is the value below which 75% of the residuals fall. It's 0.24009, meaning that three-quarters of the residuals are below 0.24009.
+
+Max: This is the maximum value of the residuals. The maximum residual is 2.10327, indicating that there is at least one data point for which the model overpredicts the log-transformed price by approximately 2.10327 units.
+
+
+
+```{r}
+
+summary(log(train_df$price))
+
+```
+
+
+```{r}
+
+residuals <- resid(model_1)
+
+hist(residuals, main="Histogram of Residuals", xlab="Residuals", col="lightblue", border="black")
+
+
+```
+Residuals follow a normal distribution, which is a desirable characteristic for a regression model.
+
+
+
+Checking accuracy on training set
+
+```{r}
+
+
+
+pred = predict (model_1, train_df)
+accuracy(pred, train_df$price)
+
+```
+
+```{r}
+
+#as these 2 categories were not there in training set
+valid_df <- subset(valid_df, !(bathrooms_text %in% c("2.5 shared baths", "Private half-bath")))
+
+pred = predict (model_1, valid_df)
+accuracy(pred, valid_df$price)
+
+```
+```{r}
+
+sd(train_df$price)
+```
+
+In both the train and validation sets, the RMSE and MAE and all other error measures are comparable but slightly higher for the validation set. The RMSE of the train data is 187.20 while the RMSE of the test data is 194.90. The MAE of the train data is 146.80 while the MAE of the test data is 151.54. 
+
+A model that overfits the training data may have limited predictive power for new observations, which could result in poorer accuracy on the validation set. If the accuracy on the validation set is significantly lower than that on the training set, it indicates potential overfitting. Here, there seems to be no issue of overfitting. 
+
+

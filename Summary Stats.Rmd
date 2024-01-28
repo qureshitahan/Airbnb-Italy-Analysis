@@ -1,0 +1,91 @@
+---
+title: "Summary Stats"
+author: "Sheethal C Jayaram"
+date: "2023-12-12"
+output: html_document
+---
+
+```{r}
+
+df <- subset(cleaned_df, select = -c(neighborhood_overview,host_id, host_name, 
+                                     host_since, host_location,latitude,longitude,
+                                     property_type,amenities,beds_grouped))
+
+```
+
+
+
+```{r}
+
+summary(df$price)
+
+```
+
+The output provides a summary of the distribution of the variable "price" in the data. 
+
+Min. (Minimum): The smallest value in the "price" variable is 20.0. This is the minimum price observed in the data.
+
+1st Qu. (First Quartile): The value at the first quartile (25th percentile) is 90.0. This means that 25% of the data falls below this value.
+
+Median: The median (50th percentile) price is 125.0. It represents the middle value of the data when it is ordered.
+
+Mean (Average): The mean (average) price is 153.4. It is calculated by summing up all prices and dividing by the total number of observations.
+
+3rd Qu. (Third Quartile): The value at the third quartile (75th percentile) is 174.0. This means that 75% of the data falls below this value.
+
+Max. (Maximum): The largest value in the "price" variable is 986.0. This is the maximum price observed in the data.
+
+In summary, this output provides a quick overview of the central tendency and spread of the "price" variable, including minimum, quartiles, median, mean, and maximum values.
+
+
+
+Let us visualize the variation of price with some variables. 
+
+```{r}
+
+ggplot(df, aes(x = price)) +
+  geom_histogram(binwidth = 50, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Price", x = "Price", y = "Frequency") +
+  theme_minimal()
+
+
+```
+
+
+
+The histogram of the price variable is right-skewed, which suggests that the majority of the prices are concentrated towards the lower end, with a few higher-priced outliers.  
+
+
+```{r}
+
+room_type_summary <- aggregate(price ~ room_type, data = df, 
+                               FUN = function(x) c(Mean = mean(x), Median = median(x)))
+
+print(room_type_summary)
+
+
+```
+
+The room_type_summary table summarizes the average and median prices for different room types. It reveals that "Entire home/apt" has the highest mean and median prices among the room types, followed by "Hotel room" and "Private room." This information provides a quick overview of the pricing distribution across room types, highlighting potential patterns or variations in Airbnb listing prices based on the type of accommodation.
+
+
+```{r}
+
+correlation_matrix <- cor(df[c("price", "beds")])
+print("Correlation Matrix:")
+print(correlation_matrix)
+
+```
+
+
+The correlation matrix between "price" and "beds" reveals a positive correlation coefficient of approximately 0.34. This suggests a moderate positive linear relationship between the number of beds in an Airbnb listing and its corresponding price. In other words, as the number of beds increases, there tends to be a modest increase in the listing price. 
+
+
+```{r}
+
+identify_verified <- aggregate(price ~ host_identity_verified, data = df, 
+                               FUN = function(x) c(Mean = mean(x), Median = median(x)))
+identify_verified
+
+```
+The aggregation based on host identity verification status reveals that listings with verified hosts (host_identity_verified = "t") have a higher average price (Mean = $154.48) compared to listings with unverified hosts (host_identity_verified = "f") with an average price of $138.18. The median price for verified hosts is also higher ($126.00) compared to unverified hosts ($100.00). This suggests a potential association between host identity verification and higher listing prices, emphasizing the role of host verification as a factor influencing pricing patterns in the dataset.
